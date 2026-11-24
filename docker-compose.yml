@@ -1,0 +1,49 @@
+services:
+  # Vector 1: Exposed Docker Daemon Socket
+  # Misconfiguration: Mounting /var/run/docker.sock into untrusted container
+  lab-sock-escape:
+    image: alpine:latest
+    container_name: lab-sock-escape
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: >
+      sh -c "apk add --no-cache curl docker-cli bash &&
+             echo 'Flag 1 (Socket): DOCKER_ESC{s0ck_t0_h0st_r00t}' > /flag1.txt &&
+             tail -f /dev/null"
+
+  # Vector 2: Privileged Container with Raw Block Devices
+  # Misconfiguration: Running with --privileged grants full capabilities and /dev access
+  lab-privileged-escape:
+    image: alpine:latest
+    container_name: lab-privileged-escape
+    privileged: true
+    command: >
+      sh -c "apk add --no-cache util-linux bash &&
+             echo 'Flag 2 (Privileged): DOCKER_ESC{pr1v1l3g3d_d1sk_m0unt}' > /flag2.txt &&
+             tail -f /dev/null"
+
+  # Vector 3: Shared Host PID Namespace
+  # Misconfiguration: pid: host combined with debug capabilities allows /proc/1/root traversal
+  lab-pid-escape:
+    image: alpine:latest
+    container_name: lab-pid-escape
+    pid: host
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
+    command: >
+      sh -c "apk add --no-cache bash procps &&
+             echo 'Flag 3 (PID): DOCKER_ESC{p1d_h0st_pr0c_1_tr4v3rs4l}' > /flag3.txt &&
+             tail -f /dev/null"
+
+  # Vector 4: Sensitive Host Filesystem Mount
+  # Misconfiguration: Mounting host root / or sensitive directories with write permissions
+  lab-volume-escape:
+    image: alpine:latest
+    container_name: lab-volume-escape
+    volumes:
+      - /:/host:rw
+    command: >
+      sh -c "echo 'Flag 4 (Volume): DOCKER_ESC{h0st_fs_wr1t3_cr0n}' > /flag4.txt &&
+             tail -f /dev/null"
