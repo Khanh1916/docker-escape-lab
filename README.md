@@ -1,6 +1,6 @@
 # Docker Escape Lab
 
-Hands-on Docker Compose lab with four misconfigured containers for practising container breakouts on a local Linux or WSL2 machine.
+Docker Compose practice environment containing four intentionally misconfigured containers for container escape research and local verification.
 
 <p align="center">
   <img src="https://img.shields.io/badge/Docker-20.10%2B-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
@@ -11,18 +11,18 @@ Hands-on Docker Compose lab with four misconfigured containers for practising co
 
 <p align="center"><strong>English</strong> · <a href="README.vi.md">Tiếng Việt</a></p>
 
-> Lab use only. I built this lab with four insecure container configs on purpose, to test container breakouts locally. Never run these techniques against a system you do not own or have written permission to test.
+> Lab use only. This repository provides intentionally insecure container configurations for security research and training on isolated machines. Never run these techniques against systems without explicit authorization.
 
 ## Overview
 
-Each service in `docker-compose.yml` isolates one common operational mistake and hides a flag file at `/flag1.txt` through `/flag4.txt`:
+Each service in `docker-compose.yml` reproduces one common container misconfiguration and places a marker flag at `/flag1.txt` through `/flag4.txt`:
 
-| # | Service | Misconfiguration | Breakout path |
+| # | Service | Misconfiguration | Breakout vector |
 |---|---|---|---|
 | 1 | `lab-sock-escape` | `-v /var/run/docker.sock:...` | Spawn a host-mounted container and `chroot` |
 | 2 | `lab-privileged-escape` | `privileged: true` | Mount the host block device (`/dev/sda`) directly |
-| 3 | `lab-pid-escape` | `pid: host` + `SYS_PTRACE` | Walk host rootfs through `/proc/1/root` |
-| 4 | `lab-volume-escape` | `-v /:/host:rw` | Write directly to host cron or SSH keys |
+| 3 | `lab-pid-escape` | `pid: host` + `SYS_PTRACE` | Traverse host rootfs through `/proc/1/root` |
+| 4 | `lab-volume-escape` | `-v /:/host:rw` | Modify host cron schedules or SSH authorized keys |
 
 ## Run it yourself
 
@@ -34,19 +34,19 @@ cd docker-escape-lab
 docker compose up -d
 ```
 
-Check that all four containers are up:
+Verify that all four containers are running:
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
 ```
 
-Run the verification script to confirm every misconfiguration is live:
+Run the verification script to confirm every misconfiguration is active:
 
 ```bash
 sh scripts/verify_all.sh
 ```
 
-## Breakout steps
+## Breakout verification
 
 ### 1. Docker daemon socket
 
@@ -87,9 +87,9 @@ ls -la /host
 echo "Escaped via Volume Mount" > /host/tmp/proof_escape.txt
 ```
 
-## Hardening summary
+## Hardening
 
-Never mount `/var/run/docker.sock` into application or CI containers; use Kaniko/Buildah for builds or put `tecnativa/docker-socket-proxy` in front to restrict endpoints to read-only `GET`. Ban `privileged: true`, drop all capabilities with `--cap-drop=ALL`, and mount volumes read-only (`:ro`) whenever possible. Enable `userns-remap` in `/etc/docker/daemon.json` (or run Rootless Docker / Podman) alongside `--read-only --tmpfs /tmp`.
+Avoid mounting `/var/run/docker.sock` into application or CI containers; use Kaniko or Buildah for rootless builds, or place `tecnativa/docker-socket-proxy` in front to limit access to read-only `GET` endpoints. Block `privileged: true`, drop all capabilities with `--cap-drop=ALL`, and mount volumes read-only (`:ro`) whenever writes are unnecessary. Enable `userns-remap` in `/etc/docker/daemon.json` (or run Rootless Docker / Podman) alongside `--read-only --tmpfs /tmp`.
 
 ## Teardown
 
@@ -99,6 +99,6 @@ docker compose down
 
 ## Walkthrough & License
 
-Full write-up and mechanics: [khanh1916.github.io/notes](https://khanh1916.github.io/notes)
+Full technical write-up: [khanh1916.github.io/notes](https://khanh1916.github.io/notes)
 
 Licensed under the [MIT License](LICENSE).

@@ -1,6 +1,6 @@
 # Docker Escape Lab
 
-Lab Docker Compose gồm bốn container cấu hình hở sẵn để thực hành thoát khỏi container trên máy Linux hoặc WSL2.
+Môi trường Docker Compose gồm bốn container cấu hình hở có chủ đích, phục vụ nghiên cứu cơ chế cô lập của Linux kernel và thực hành các kỹ thuật thoát container trên máy cá nhân.
 
 <p align="center">
   <img src="https://img.shields.io/badge/Docker-20.10%2B-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
@@ -11,22 +11,22 @@ Lab Docker Compose gồm bốn container cấu hình hở sẵn để thực hà
 
 <p align="center"><a href="README.md">English</a> · <strong>Tiếng Việt</strong></p>
 
-> Lab này tôi tự dựng với bốn lỗi cấu hình cố ý để thực hành thoát container trên máy cá nhân. Không chạy các kỹ thuật này lên hệ thống bạn không sở hữu hoặc chưa được cấp phép.
+> Toàn bộ cấu hình trong repository này cố ý thiết lập thiếu chặt chẽ nhằm phục vụ học tập và kiểm chứng bảo mật trên môi trường cô lập. Không áp dụng những kỹ thuật này lên hệ thống không thuộc quyền sở hữu hoặc chưa được cấp phép.
 
 ## Tổng quan
 
-Mỗi service trong `docker-compose.yml` tách riêng một lỗi cấu hình hay gặp ngoài thực tế và đặt sẵn một file flag từ `/flag1.txt` đến `/flag4.txt`:
+Mỗi service trong `docker-compose.yml` tái hiện một lỗi cấu hình thường gặp trong thực tế vận hành, kèm file flag đánh dấu từ `/flag1.txt` đến `/flag4.txt`:
 
-| # | Service | Lỗi cấu hình | Hướng thoát ra host |
+| # | Service | Lỗi cấu hình | Cơ chế thoát ra host |
 |---|---|---|---|
-| 1 | `lab-sock-escape` | `-v /var/run/docker.sock:...` | Tạo container mới mount `/` của host rồi `chroot` |
-| 2 | `lab-privileged-escape` | `privileged: true` | Mount thẳng phân vùng ổ đĩa host (`/dev/sda`) |
-| 3 | `lab-pid-escape` | `pid: host` + `SYS_PTRACE` | Đi xuyên sang rootfs của host qua `/proc/1/root` |
-| 4 | `lab-volume-escape` | `-v /:/host:rw` | Ghi thẳng vào cron hoặc SSH key của host |
+| 1 | `lab-sock-escape` | `-v /var/run/docker.sock:...` | Khởi tạo container mới mount `/` của host rồi `chroot` |
+| 2 | `lab-privileged-escape` | `privileged: true` | Mount trực tiếp phân vùng ổ đĩa của host (`/dev/sda`) |
+| 3 | `lab-pid-escape` | `pid: host` + `SYS_PTRACE` | Truy cập rootfs của host thông qua `/proc/1/root` |
+| 4 | `lab-volume-escape` | `-v /:/host:rw` | Ghi đè lịch cron hoặc chèn SSH key trên host |
 
 ## Tự chạy tái lập
 
-Yêu cầu: đã cài Docker và Docker Compose v2 trở lên trên Linux hoặc Windows WSL2.
+Yêu cầu: đã cài đặt Docker và Docker Compose v2 trở lên trên Linux hoặc Windows WSL2.
 
 ```bash
 git clone https://github.com/Khanh1916/docker-escape-lab.git
@@ -34,19 +34,19 @@ cd docker-escape-lab
 docker compose up -d
 ```
 
-Kiểm tra cả bốn container đã chạy:
+Kiểm tra trạng thái các container sau khi khởi động:
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
 ```
 
-Chạy script kiểm tra nhanh bốn cấu hình hở:
+Chạy script kiểm tra nhanh để xác nhận cả bốn cấu hình hở đều đang hoạt động:
 
 ```bash
 sh scripts/verify_all.sh
 ```
 
-## Các bước khai thác
+## Các bước kiểm chứng
 
 ### 1. Docker daemon socket
 
@@ -56,11 +56,11 @@ docker exec -it lab-sock-escape bash
 # Dùng Docker CLI
 docker run --rm -it -v /:/host alpine chroot /host
 
-# Hoặc gọi trực tiếp qua curl nếu không có CLI
+# Hoặc gọi trực tiếp qua curl nếu container không cài CLI
 curl -s --unix-socket /var/run/docker.sock http://localhost/version
 ```
 
-### 2. Container chạy privileged
+### 2. Container chạy chế độ privileged
 
 ```bash
 docker exec -it lab-privileged-escape bash
@@ -87,9 +87,9 @@ ls -la /host
 echo "Escaped via Volume Mount" > /host/tmp/proof_escape.txt
 ```
 
-## Phòng thủ ra sao
+## Biện pháp khắc phục
 
-Không mount `/var/run/docker.sock` vào container app hay runner CI. Nếu cần build image thì chuyển sang Kaniko hoặc Buildah, còn nếu chỉ đọc thông tin container thì đặt `tecnativa/docker-socket-proxy` chặn phía trước và chỉ mở API `GET`. Cấm dùng `privileged: true`, drop hết capability bằng `--cap-drop=ALL`, và gắn `:ro` cho volume nào chỉ cần đọc. Ngoài ra nên bật `userns-remap` trong `/etc/docker/daemon.json` (hoặc chạy Rootless Docker / Podman) đi kèm `--read-only --tmpfs /tmp`.
+Không mount `/var/run/docker.sock` vào container ứng dụng hay CI runner. Với nhu cầu build image có thể chuyển sang Kaniko hoặc Buildah, còn nếu chỉ đọc thông tin container thì đặt `tecnativa/docker-socket-proxy` phía trước để giới hạn ở các endpoint `GET` chỉ đọc. Chặn cờ `privileged: true`, gỡ toàn bộ capability mặc định bằng `--cap-drop=ALL`, và gắn `:ro` cho mọi volume không cần ghi. Ngoài ra nên kích hoạt `userns-remap` trong `/etc/docker/daemon.json` (hoặc dùng Rootless Docker / Podman) kết hợp `--read-only --tmpfs /tmp`.
 
 ## Dọn dẹp
 
@@ -99,6 +99,6 @@ docker compose down
 
 ## Bài viết chi tiết & Giấy phép
 
-Phân tích đầy đủ từng bước và cơ chế kernel xem tại: [khanh1916.github.io/notes](https://khanh1916.github.io/notes)
+Phân tích cơ chế kỹ thuật đầy đủ xem tại: [khanh1916.github.io/notes](https://khanh1916.github.io/notes)
 
 Dự án phát hành theo [Giấy phép MIT](LICENSE).
