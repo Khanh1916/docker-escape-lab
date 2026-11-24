@@ -24,7 +24,7 @@ Mỗi service trong `docker-compose.yml` tái hiện một lỗi cấu hình th�
 | 3 | `lab-pid-escape` | `pid: host` + `SYS_PTRACE` | Truy cập rootfs của host thông qua `/proc/1/root` |
 | 4 | `lab-volume-escape` | `-v /:/host:rw` | Ghi đè lịch cron hoặc chèn SSH key trên host |
 
-## Tự chạy tái lập
+## Môi trường thực hành
 
 Yêu cầu: đã cài đặt Docker và Docker Compose v2 trở lên trên Linux hoặc Windows WSL2.
 
